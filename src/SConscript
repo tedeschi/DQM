@@ -9,7 +9,6 @@ Import('mu2e_helper')
 
 helper=mu2e_helper(env);
 rootlibs  = env['ROOTLIBS']
-babarlibs = env['BABARLIBS']
 
 mainlib = helper.make_mainlib ( [ 'mu2e_DbService',
                                   'mu2e_DbTables',
@@ -26,7 +25,6 @@ helper.make_plugins( [ mainlib,
                        'mu2e_GeometryService',
                        'mu2e_CalorimeterGeom',
                        'mu2e_CaloCluster',
-                       babarlibs,
                        'KinKal_Trajectory',
                        'KinKal_General',
                        'mu2e_GeneralUtilities',
