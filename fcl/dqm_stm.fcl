@@ -1,0 +1,27 @@
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : DQM
+
+source : { module_type : RootInput }
+
+services : @local::Services.Reco
+
+physics:
+{
+  producers : {}
+  analyzers : {
+   dqmStm : {
+     module_type : DqmStm
+     phHPGeTag: "makeSTMDigis:phHPGe"
+     phLaBrTag: "makeSTMDigis:phLaBr"
+   }
+  }
+  
+
+ MyTrigPath : []
+ MyEndPath : [dqmStm]
+
+}
+
+services.TFileService.fileName : "dqm_stm.root"
