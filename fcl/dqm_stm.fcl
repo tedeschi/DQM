@@ -15,6 +15,12 @@ physics:
      module_type : DqmStm
      phHPGeTag: "makeSTMDigis:phHPGe"
      phLaBrTag: "makeSTMDigis:phLaBr"
+     rawHPGeTag: "makeSTMDigis:rawHPGe"
+     rawLaBrTag: "makeSTMDigis:rawLaBr"
+     zsHPGeTag: "makeSTMDigis:zsHPGe"
+     zsLaBrTag: "makeSTMDigis:zsLaBr"
+
+     fragSummaryTag: "makeSTMDigis:stmFragSummary"
    }
   }
   
