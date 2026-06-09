@@ -39,6 +39,10 @@ class DqmStm : public art::EDAnalyzer {
     fhicl::Atom<art::InputTag> HPGefragSummaryTag{Name("HPGefragSummaryTag"), Comment("STM HPGe fragment summary collection"), art::InputTag()};
     fhicl::Atom<art::InputTag> LaBrfragSummaryTag{Name("LaBrfragSummaryTag"), Comment("STM LaBr fragment summary collection"), art::InputTag()};
 
+    //For later use
+    fhicl::Atom<art::InputTag> stmDigisTag{Name("digiTag"), Comment("STM Digi Collection"), art::InputTag()};
+    fhicl::Atom<art::InputTag> stmPHDigisTag{Name("stmPHDigisTag"), Comment("Input Tag fo STMPHDigiCollection")};
+    // fhicl::Atom<art::InputTag> recoTag{Name("recoTag"), Comment("STMRecoPulses Collection"), art::InputTag()};
   };
   typedef art::EDAnalyzer::Table<Config> Parameters;
 
@@ -56,31 +60,45 @@ private:
   TH1D* _hVer;
   // Container and Inner Frag Counts
   TH1D* _hNContainerFrags;
-  TH1D* _hNInnerFrags;
+  TH1D* _hNTotalInnerFrags;
 
   //Raw
   TH1D* _hNRAWHPGe; //Raw Waveform size
   TH1D* _hNRAWLaBr;
-  TH1D* _hNRawHPGeInnerFrags;
-  TH1D* _hNRawLaBrInnerFrags;
+  TH1D* _hNGoodRawHPGeInnerFrags;
+  TH1D* _hNGoodRawLaBrInnerFrags;
+  TH1D* _hNZeroRawHPGeInnerFrags;
+  TH1D* _hNZeroRawLaBrInnerFrags;
+  TH1D* _hNEmptyRawHPGeInnerFrags;
+  TH1D* _hNEmptyRawLaBrInnerFrags;
   TH1D* _hRawHPGeADC;
   TH1D* _hRawLaBrADC;
 
   //ZS
   TH1D* _hNZSHPGe; //ZS Waveform size 
   TH1D* _hNZSLaBr;
-  TH1D* _hNZSHPGeInnerFrags;
-  TH1D* _hNZSLaBrInnerFrags;
+  TH1D* _hNGoodZSHPGeInnerFrags;
+  TH1D* _hNGoodZSLaBrInnerFrags;
+  TH1D* _hNZeroZSHPGeInnerFrags;
+  TH1D* _hNZeroZSLaBrInnerFrags;
+  TH1D* _hNEmptyZSHPGeInnerFrags;
+  TH1D* _hNEmptyZSLaBrInnerFrags;
   TH1D* _hZSHPGeADC;
   TH1D* _hZSLaBrADC;
 
   // PH digis
-  TH1D* _hNPHHPGeInnerFrags;
-  TH1D* _hNPHLaBrInnerFrags;
+  // TH1D* _hNPHHPGeInnerFrags;
+  // TH1D* _hNPHLaBrInnerFrags;
   TH1D* _hNPHHPGe; //Number of pulse heights for HPGe
   TH1D* _hPulseHeightHPGe; //Pulse Heigt of HPGe
   TH1D* _hNPHLaBr; //Number of pulse heights for LaBr                                                          
   TH1D* _hPulseHeightLaBr; //Pulse Heigt of LaBr
+  TH1D* _hNGoodPHHPGeInnerFrags;
+  TH1D* _hNGoodPHLaBrInnerFrags;
+  TH1D* _hNZeroPHHPGeInnerFrags;
+  TH1D* _hNZeroPHLaBrInnerFrags;
+  TH1D* _hNEmptyPHHPGeInnerFrags;
+  TH1D* _hNEmptyPHLaBrInnerFrags;
   
 };
 /*****************************/
@@ -95,6 +113,7 @@ DqmStm::DqmStm(const Parameters& conf) : art::EDAnalyzer(conf), _conf(conf()) {
   mayConsume<STMWaveformDigiCollection>(_conf.zsLaBrTag());
   mayConsume<STMFragmentSummaryCollection>(_conf.HPGefragSummaryTag());
   mayConsume<STMFragmentSummaryCollection>(_conf.LaBrfragSummaryTag());
+  //mayConsume<STMFragmentSummaryCollection>(_conf.stmPHDigisTag);
   //Will add more in time such as raw, zs, frag count etc. 
 }
 
@@ -108,23 +127,22 @@ void DqmStm::beginJob() {
   //histograms
   if (!_conf.rawHPGeTag().empty()){
     _hNRAWHPGe = tfs->make<TH1D>("NRawWaveformDigisHPGe", "N RAW HPGe WaveformDigis;Number of Raw WF Digis;Entries", 250, -0.5, 500.5);
-    _hRawHPGeADC = tfs->make<TH1D>("RawADCHPGe","Raw HPGe ADC in Waveform;ADC;Samples", 100,0.0,3000.0); 
+    _hRawHPGeADC = tfs->make<TH1D>("RawADCHPGe","Raw HPGe ADC in Waveform;ADC;Samples", 500,-500.0,500.0); 
   }
 
   if (!_conf.rawLaBrTag().empty()){
     _hNRAWLaBr = tfs->make<TH1D>("NRawWaveformDigisLaBr", "N RAW LaBr WaveformDigis;Number of Raw WF Digis:Entries", 250, -0.5, 500.5);
-     _hRawLaBrADC = tfs->make<TH1D>("RawADCLaBr","Raw LaBr ADC in Waveform;ADC;Samples", 100,0.0,3000.0);
-
+     _hRawLaBrADC = tfs->make<TH1D>("RawADCLaBr","Raw LaBr ADC in Waveform;ADC;Samples", 500,-500.0,500.0);
   }
 
   if (!_conf.zsHPGeTag().empty()){
     _hNZSHPGe = tfs->make<TH1D>("NZSWaveformDigisHPGe", "N ZS HPGe WaveformDigis;Number of ZS WF Digis;Entries", 250, -0.5, 500.5);
-    _hZSHPGeADC = tfs->make<TH1D>("ZSADCHPGe","ZS HPGe ADC in Waveform;ADC;Samples", 100,0.0,3000.0);
+    _hZSHPGeADC = tfs->make<TH1D>("ZSADCHPGe","ZS HPGe ADC in Waveform;ADC;Samples", 500,-500.0,500.0);
   }
 
   if (!_conf.zsLaBrTag().empty()){
     _hNZSLaBr = tfs->make<TH1D>("NZSWaveformDigisLaBr", "N ZS LaBr WaveformDigis;Number of ZS WF Digis;Entries", 250, -0.5, 500.5);
-    _hZSLaBrADC = tfs->make<TH1D>("ZSADCLaBr","ZS LaBr ADC in Waveform;ADC;Samples", 100,0.0,3000.0);
+    _hZSLaBrADC = tfs->make<TH1D>("ZSADCLaBr","ZS LaBr ADC in Waveform;ADC;Samples", 500,-500.0,500.0);
   }
 
   if (!_conf.phHPGeTag().empty()){
@@ -137,19 +155,74 @@ void DqmStm::beginJob() {
     _hPulseHeightLaBr = tfs->make<TH1D>("PulseHeightLaBr", "STM LaBr Pulse Height;Pulse Height;Entries", 1000, 0.0, 10000.0);
   }
 
-  if (!_conf.HPGefragSummaryTag().empty()&& !_conf.LaBrfragSummaryTag().empty()){
-    _hNContainerFrags = tfs->make<TH1D>("NContainerFrags","N STM Container Fragments;Number of Container Frags;Events",20,-0.5,19.5);
-    _hNInnerFrags = tfs->make<TH1D>("NInnerFrags", "N STM Inner Fragments;Number of Inner Frags;Events",200,-0.5,2000.5);
+  if (!_conf.HPGefragSummaryTag().empty()){
+    _hNContainerFrags = tfs->make<TH1D>("NContainerFrags",
+					"N STM Container Fragments;Number of Container Frags;Events",
+					4,-0.5,4);
+    _hNTotalInnerFrags = tfs->make<TH1D>("NTotalInnerFrags",
+					 "N STM Inner Fragments;Number of Inner Frags;Events",
+					 200,-0.5,2000.5);
+    
+    _hNGoodRawHPGeInnerFrags = tfs->make<TH1D>("NGoodRawHPGeInnerFrags",
+					       "N Good Raw HPGE Inner Frags; Number of Inner Frags;Events",
+					       200,-10.5, 250.5);
+    _hNGoodZSHPGeInnerFrags = tfs->make<TH1D>("NGoodZSHPGeInnerFrags",
+					      "N Good ZS HPGE Inner Frags; Number of Inner Frags;Events",
+					      200,-10.5, 250.5);
+    _hNGoodPHHPGeInnerFrags = tfs->make<TH1D>("NGoodPHHPGeInnerFrags",
+					      "N Good PH HPGE Inner Frags; Number of Inner Frags;Events",
+					      200,-10.5,250.5);
+    _hNZeroRawHPGeInnerFrags = tfs->make<TH1D>("NZeroRawHPGeInnerFrags",
+					       "N Zero Raw HPGE Inner Frags; Number of Inner Frags;Events",
+					       200,-10.5,250.5);
+    _hNZeroZSHPGeInnerFrags = tfs->make<TH1D>("NZeroZSHPGeInnerFrags",
+					      "N ZS HPGE Inner Frags; Number of Inner Frags;Events",
+					      200,-10.5,250.5);   
+    _hNZeroPHHPGeInnerFrags = tfs->make<TH1D>("NZeroPHHPGeInnerFrags",
+					      "N PH HPGE Inner Frags; Number of Inner Frags;Events",
+					      200,-10.5,250.5);   
+    _hNEmptyRawHPGeInnerFrags = tfs->make<TH1D>("NEmptyRawHPGeInnerFrags",
+						"N Raw HPGE Inner Frags; Number of Inner Frags;Events ",
+						200,-10.5,250.5);
+    _hNEmptyZSHPGeInnerFrags = tfs->make<TH1D>("NEmptyZSHPGeInnerFrags",
+					      "N ZS HPGE Inner Frags; Number of Inner Frags;Events",
+					       200,-10.5,250.5);   
+    _hNEmptyPHHPGeInnerFrags = tfs->make<TH1D>("NEmptyPHHPGeInnerFrags",
+					      "N PH HPGE Inner Frags; Number of Inner Frags;Events",
+					      200,-10.5,250.5);   
+  }
 
-    _hNRawHPGeInnerFrags = tfs->make<TH1D>("NRawHPGeInnerFrags", "N Raw HPGE Inner Frags; Number of Inner Frags;Events", 200,-0.5,1000.5);
-    _hNRawLaBrInnerFrags = tfs->make<TH1D>("NRawLaBrInnerFrags", "N Raw LaBr Inner Frags; Number of Inner Frags;Events", 200,-0.5,1000.5);
-    _hNZSHPGeInnerFrags = tfs->make<TH1D>("NZSHPGeInnerFrags", "N ZS HPGE Inner Frags; Number of Inner Frags;Events", 200,-0.5,1000.5);
-    _hNZSLaBrInnerFrags = tfs->make<TH1D>("NZSLaBrInnerFrags", "N ZS LaBr Inner Frags; Number of Inner Frags;Events", 200,-0.5,1000.5);
-    _hNPHHPGeInnerFrags = tfs->make<TH1D>("NPHHPGeInnerFrags", "N PH HPGE Inner Frags; Number of Inner Frags;Events", 200,-0.5,1000.5);
-    _hNPHLaBrInnerFrags = tfs->make<TH1D>("NPHLaBrInnerFrags", "N PH LaBr Inner Frags; Number of Inner Frags;Events", 200,-0.5,1000.5);
-
-  }  
+  if (!_conf.LaBrfragSummaryTag().empty()){
+    _hNGoodRawLaBrInnerFrags = tfs->make<TH1D>("NGoodRawLaBrInnerFrags",
+					       "N Raw LaBr Inner Frags; Number of Inner Frags;Events",
+					       200, -10.5, 250.5);
+    _hNGoodZSLaBrInnerFrags = tfs->make<TH1D>("NGoodZSLaBrInnerFrags",
+					      "N ZS LaBr Inner Frags; Number of Inner Frags;Events",
+					      200, -10.5, 250.5);
+    _hNGoodPHLaBrInnerFrags = tfs->make<TH1D>("NGoodPHLaBrInnerFrags",
+					      "N PH LaBr Inner Frags; Number of Inner Frags;Events",
+					      200, -10.5, 250.5);
+    _hNZeroRawLaBrInnerFrags = tfs->make<TH1D>("NZeroRawLaBrInnerFrags",
+                                               "N Zero Raw LaBr Inner Frags; Number of Inner Frags;Events",
+                                               200, -10.5, 250.5);
+    _hNZeroZSLaBrInnerFrags = tfs->make<TH1D>("NZeroZSLaBrInnerFrags",
+                                              "N Zero ZS LaBr Inner Frags; Number of Inner Frags;Events",
+                                              200, -10.5, 250.5);
+    _hNZeroPHLaBrInnerFrags = tfs->make<TH1D>("NZeroPHLaBrInnerFrags",
+                                              "N Zero PH LaBr Inner Frags; Number of Inner Frags;Events",
+                                              200, -10.5, 250.5);
+    _hNEmptyRawLaBrInnerFrags = tfs->make<TH1D>("NEmptyRawLaBrInnerFrags",
+                                                "N Empty Raw LaBr Inner Frags; Number of Inner Frags;Events ",
+                                                200, -10.5, 250.5);
+    _hNEmptyZSLaBrInnerFrags = tfs->make<TH1D>("NEmptyZSLaBrInnerFrags",
+                                              "N Empty ZS LaBr Inner Frags; Number of Inner Frags;Events",
+                                               200, -10.5, 250.5);
+    _hNEmptyPHLaBrInnerFrags = tfs->make<TH1D>("NEmptyPHLaBrInnerFrags",
+                                              "N Empty PH LaBr Inner Frags; Number of Inner Frags;Events",
+                                              200, -10.5, 250.5);
+  }
 }
+
 
 /************************************/
   // Filling the histograms
@@ -160,13 +233,17 @@ void DqmStm::analyze(const art::Event& event) {
     auto summaryHandle = event.getValidHandle<STMFragmentSummaryCollection>(_conf.HPGefragSummaryTag());
     for (const auto& summary : *summaryHandle){
       _hNContainerFrags->Fill(summary.nContainerFrags());
-      _hNInnerFrags->Fill(summary.nInnerFrags());
-      _hNRawHPGeInnerFrags ->Fill(summary.nGoodRawFrags());
-      //_hNRawLaBrInnerFrags ->Fill(summary.nRawLaBrInnerFrags());
-      _hNZSHPGeInnerFrags ->Fill(summary.nGoodZSFrags());
-      //_hNZSLaBrInnerFrags ->Fill(summary.nZSLaBrInnerFrags());
-      _hNPHHPGeInnerFrags ->Fill(summary.nGoodPHFrags());
-      //_hNPHLaBrInnerFrags ->Fill(summary.nPHLaBrInnerFrags());
+      _hNTotalInnerFrags->Fill(summary.nInnerFrags());
+      _hNGoodRawHPGeInnerFrags ->Fill(summary.nGoodRawFrags());
+      _hNGoodZSHPGeInnerFrags ->Fill(summary.nGoodZSFrags());
+      _hNGoodPHHPGeInnerFrags ->Fill(summary.nGoodPHFrags());
+      _hNZeroRawHPGeInnerFrags ->Fill(summary.nZeroRawFrags());
+      _hNZeroZSHPGeInnerFrags ->Fill(summary.nZeroZSFrags());
+      _hNZeroPHHPGeInnerFrags ->Fill(summary.nZeroPHFrags());
+      _hNEmptyRawHPGeInnerFrags ->Fill(summary.nEmptyRawFrags());
+      _hNEmptyZSHPGeInnerFrags ->Fill(summary.nEmptyZSFrags());
+      _hNEmptyPHHPGeInnerFrags ->Fill(summary.nEmptyPHFrags());
+
     }
   }
 
@@ -175,13 +252,15 @@ void DqmStm::analyze(const art::Event& event) {
     for (const auto& summary : *summaryHandle){
       //_hNContainerFrags->Fill(summary.nContainerFrags());
       //_hNInnerFrags->Fill(summary.nInnerFrags());
-      //_hNRawHPGeInnerFrags ->Fill(summary.nRawHPGeInnerFrags());
-      _hNRawLaBrInnerFrags ->Fill(summary.nGoodRawFrags());
-      //_hNZSHPGeInnerFrags ->Fill(summary.nZSHPGeInnerFrags());
-      _hNZSLaBrInnerFrags ->Fill(summary.nGoodZSFrags());
-      //_hNPHHPGeInnerFrags ->Fill(summary.nPHHPGeInnerFrags());
-      _hNPHLaBrInnerFrags ->Fill(summary.nGoodPHFrags());
-      
+      _hNGoodRawLaBrInnerFrags ->Fill(summary.nGoodRawFrags());
+      _hNGoodZSLaBrInnerFrags ->Fill(summary.nGoodZSFrags());
+      _hNGoodPHLaBrInnerFrags ->Fill(summary.nGoodPHFrags());
+      _hNZeroRawLaBrInnerFrags ->Fill(summary.nZeroRawFrags());
+      _hNZeroZSLaBrInnerFrags ->Fill(summary.nZeroZSFrags());
+      _hNZeroPHLaBrInnerFrags ->Fill(summary.nZeroPHFrags());
+      _hNEmptyRawLaBrInnerFrags ->Fill(summary.nEmptyRawFrags());
+      _hNEmptyZSLaBrInnerFrags ->Fill(summary.nEmptyZSFrags());
+      _hNEmptyPHLaBrInnerFrags ->Fill(summary.nEmptyPHFrags());
     }
   }
 

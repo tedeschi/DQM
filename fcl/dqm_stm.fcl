@@ -21,6 +21,9 @@ physics:
      zsLaBrTag: "makeSTMDigis:zsLaBr"
      HPGefragSummaryTag: "makeSTMDigis:stmFragSummaryHPGe"
      LaBrfragSummaryTag: "makeSTMDigis:stmFragSummaryLaBr"
+
+     digiTag : makeSTMDigis
+
    }
   }
   
