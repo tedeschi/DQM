@@ -20,6 +20,11 @@ DATASET_CMD = 'metacat dataset list "mu2e:dqm.mu2e.*"'
 PREFIX = "mu2e:dqm.mu2e."
 CHOOSE_NEW_FILE_MESSAGE = "choose new file"
 CHOOSE_NEW_HISTOGRAM_MESSAGE = "choose new histogram"
+COMPARE_HISTOGRAMS_FOUND_MESSAGE = "All compare histograms found."
+GRID_GEOMETRIES = {
+    "2x2": (2, 2),
+    "3x3": (3, 3),
+}
 
 
 def dataset_label(dataset_name: str) -> str:
@@ -32,6 +37,35 @@ def file_label(file_path: str) -> str:
     if file_path.startswith("file://"):
         file_path = file_path[len("file://") :]
     return os.path.basename(file_path)
+
+
+def selected_histograms(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [hist_name for hist_name in value if hist_name]
+    return [value]
+
+
+def grid_shape(grid_geometry: str | None) -> tuple[int, int]:
+    return GRID_GEOMETRIES.get(grid_geometry or "2x2", GRID_GEOMETRIES["2x2"])
+
+
+def grid_capacity(grid_geometry: str | None) -> int:
+    rows, columns = grid_shape(grid_geometry)
+    return rows * columns
+
+
+def displayed_histograms(value, grid_geometry: str | None) -> list[str]:
+    return selected_histograms(value)[: grid_capacity(grid_geometry)]
+
+
+def histogram_selection_label(hist_names: list[str]) -> str:
+    if not hist_names:
+        return "none"
+    if len(hist_names) <= 3:
+        return ", ".join(hist_names)
+    return f"{len(hist_names)} selected: {', '.join(hist_names[:3])}, ..."
 
 
 def load_datasets() -> tuple[list[str], str]:
@@ -146,11 +180,15 @@ def load_histogram_names(root_path: str | Path) -> tuple[list[str], str]:
     return histogram_names, f"Loaded {len(histogram_names)} histograms."
 
 
-def histogram_exists(root_path: str | Path, hist_name: str) -> tuple[bool, str]:
+def histograms_exist(root_path: str | Path, hist_names: list[str]) -> tuple[list[str], str]:
     histograms, status = load_histogram_names(root_path)
-    if hist_name in histograms:
-        return True, "Histogram found."
-    return False, status if histograms else "no histogram found"
+    if not histograms:
+        return hist_names, status
+    available_histograms = set(histograms)
+    missing_histograms = [
+        hist_name for hist_name in hist_names if hist_name not in available_histograms
+    ]
+    return missing_histograms, status
 
 
 def render_histogram_image(
@@ -392,13 +430,12 @@ def build_app() -> Dash:
             dcc.Store(id="compare-file-list-dataset", data=""),
             dcc.Store(id="compare-match-status", data=""),
             html.H1("DQM Tool"),
-            html.Img(
-                id="histogram-image",
+            html.Div(
+                id="histogram-grid",
                 style={
-                    "maxWidth": "100%",
-                    "border": "1px solid #ccc",
-                    "padding": "0.5rem",
-                    "background": "#fff",
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(2, minmax(0, 1fr))",
+                    "gap": "12px",
                     "marginBottom": "20px",
                 },
             ),
@@ -439,9 +476,31 @@ def build_app() -> Dash:
             dcc.Dropdown(
                 id="histogram-dropdown",
                 options=[],
-                value=None,
-                placeholder="Select a histogram",
+                value=[],
+                multi=True,
+                placeholder="Select histograms",
                 style={"marginTop": "12px", "maxWidth": "900px"},
+            ),
+            html.Div(
+                [
+                    html.Span("Grid", style={"fontWeight": "bold"}),
+                    dcc.RadioItems(
+                        id="grid-geometry",
+                        options=[
+                            {"label": "2x2", "value": "2x2"},
+                            {"label": "3x3", "value": "3x3"},
+                        ],
+                        value="2x2",
+                        inline=True,
+                        style={"display": "flex", "gap": "1rem"},
+                    ),
+                ],
+                style={
+                    "display": "flex",
+                    "alignItems": "center",
+                    "gap": "1rem",
+                    "marginTop": "12px",
+                },
             ),
             html.Div(
                 "Select a file to list histograms.",
@@ -594,23 +653,28 @@ def build_app() -> Dash:
     )
     def update_histogram_options(file_path, file_list_dataset, displayed_plot_id):
         if not file_path or not file_list_dataset:
-            return [], None, "", ""
+            return [], [], "", ""
 
         histograms, status = load_histogram_names(file_path)
         if not histograms:
-            return [], None, status, file_path
+            return [], [], status, file_path
 
         options = [{"label": name, "value": name} for name in histograms]
-        value = None
-        displayed_hist_name = (
-            displayed_plot_id.get("hist_name")
-            if isinstance(displayed_plot_id, dict)
-            else None
-        )
-        if displayed_hist_name:
-            if displayed_hist_name in histograms:
-                value = displayed_hist_name
-            else:
+        value = []
+        displayed_hist_names = []
+        if isinstance(displayed_plot_id, dict):
+            displayed_hist_names = selected_histograms(
+                displayed_plot_id.get("hist_names")
+                or displayed_plot_id.get("hist_name")
+            )
+        if displayed_hist_names:
+            available_histograms = set(histograms)
+            value = [
+                hist_name
+                for hist_name in displayed_hist_names
+                if hist_name in available_histograms
+            ]
+            if len(value) != len(displayed_hist_names):
                 status = CHOOSE_NEW_HISTOGRAM_MESSAGE
         return options, value, status, file_path
 
@@ -619,28 +683,38 @@ def build_app() -> Dash:
         Input("dataset-dropdown", "value"),
         Input("file-dropdown", "value"),
         Input("histogram-dropdown", "value"),
+        Input("grid-geometry", "value"),
         Input("histogram-load-status", "data"),
         Input("plot-render-status", "data"),
     )
     def update_histogram_status(
         dataset_name,
         file_path,
-        hist_name,
+        hist_names,
+        grid_geometry,
         histogram_load_status,
         plot_render_status,
     ):
         if not file_path:
             return "Select a file to list histograms."
+        selected_hist_names = selected_histograms(hist_names)
+        display_hist_names = displayed_histograms(hist_names, grid_geometry)
         if plot_render_status:
             status = plot_render_status
-        elif hist_name:
+        elif selected_hist_names:
             status = histogram_load_status
         else:
             status = histogram_load_status or CHOOSE_NEW_HISTOGRAM_MESSAGE
+        if len(selected_hist_names) > len(display_hist_names):
+            status = (
+                f"{status}\n"
+                f"Displaying first {len(display_hist_names)} of "
+                f"{len(selected_hist_names)} selected histograms."
+            )
         return (
             f"Dataset: {dataset_name or 'none'}\n"
             f"File: {file_path}\n"
-            f"Histogram: {hist_name or 'none'}\n"
+            f"Histograms: {histogram_selection_label(display_hist_names)}\n"
             f"{status}"
         )
 
@@ -687,27 +761,35 @@ def build_app() -> Dash:
         Output("compare-match-status", "data"),
         Input("compare-file-dropdown", "value"),
         Input("histogram-dropdown", "value"),
+        Input("grid-geometry", "value"),
         State("compare-enabled", "value"),
     )
-    def update_compare_availability(compare_file_path, hist_name, compare_enabled):
+    def update_compare_availability(
+        compare_file_path,
+        hist_names,
+        grid_geometry,
+        compare_enabled,
+    ):
         disabled_options = [
             {"label": "Compare", "value": "compare", "disabled": True}
         ]
         enabled_options = [
             {"label": "Compare", "value": "compare", "disabled": False}
         ]
+        display_hist_names = displayed_histograms(hist_names, grid_geometry)
 
         if not compare_file_path:
             return disabled_options, [], "Select a compare file."
-        if not hist_name:
-            return disabled_options, [], "Display a histogram first."
+        if not display_hist_names:
+            return disabled_options, [], "Display one or more histograms first."
 
-        exists, status = histogram_exists(compare_file_path, hist_name)
-        if not exists:
-            return disabled_options, [], "no histogram found"
+        missing_histograms, _status = histograms_exist(compare_file_path, display_hist_names)
+        if missing_histograms:
+            missing_label = histogram_selection_label(missing_histograms)
+            return disabled_options, [], f"Missing compare histograms: {missing_label}"
 
         value = compare_enabled if compare_enabled and "compare" in compare_enabled else []
-        return enabled_options, value, "Histogram found."
+        return enabled_options, value, COMPARE_HISTOGRAMS_FOUND_MESSAGE
 
     @callback(
         Output("compare-file-status", "children"),
@@ -716,16 +798,19 @@ def build_app() -> Dash:
         Input("compare-file-load-status", "data"),
         Input("compare-match-status", "data"),
         Input("histogram-dropdown", "value"),
+        Input("grid-geometry", "value"),
     )
     def update_compare_file_status(
         compare_dataset_name,
         compare_file_path,
         compare_file_load_status,
         compare_match_status,
-        hist_name,
+        hist_names,
+        grid_geometry,
     ):
         if not compare_dataset_name:
             return "Select a compare dataset."
+        display_hist_names = displayed_histograms(hist_names, grid_geometry)
         if not compare_file_path:
             return (
                 f"Compare dataset: {compare_dataset_name}\n"
@@ -736,17 +821,19 @@ def build_app() -> Dash:
         return (
             f"Compare dataset: {compare_dataset_name}\n"
             f"Compare file: {compare_file_path}\n"
-            f"Histogram: {hist_name or 'none'}\n"
+            f"Histograms: {histogram_selection_label(display_hist_names)}\n"
             f"{compare_match_status or compare_file_load_status}"
         )
 
     @callback(
-        Output("histogram-image", "src"),
+        Output("histogram-grid", "children"),
+        Output("histogram-grid", "style"),
         Output("displayed-plot-id", "data"),
         Output("plot-render-status", "data"),
         Input("dataset-dropdown", "value"),
         Input("file-dropdown", "value"),
         Input("histogram-dropdown", "value"),
+        Input("grid-geometry", "value"),
         Input("file-list-dataset", "data"),
         Input("histogram-list-file", "data"),
         Input("compare-dataset-dropdown", "value"),
@@ -762,7 +849,8 @@ def build_app() -> Dash:
     def update_histogram_image(
         dataset_name,
         file_path,
-        hist_name,
+        hist_names,
+        grid_geometry,
         file_list_dataset,
         histogram_list_file,
         compare_dataset_name,
@@ -775,56 +863,84 @@ def build_app() -> Dash:
         ks_test_enabled,
         compare_match_status,
     ):
-        if not file_path or not hist_name:
-            return "", no_update, ""
+        rows, columns = grid_shape(grid_geometry)
+        grid_style = {
+            "display": "grid",
+            "gridTemplateColumns": f"repeat({columns}, minmax(0, 1fr))",
+            "gap": "12px",
+            "marginBottom": "20px",
+        }
+        selected_hist_names = selected_histograms(hist_names)
+        display_hist_names = selected_hist_names[: rows * columns]
+
+        if not file_path or not display_hist_names:
+            return [], grid_style, no_update, ""
         if dataset_name != file_list_dataset or file_path != histogram_list_file:
-            return "", no_update, ""
+            return [], grid_style, no_update, ""
 
         compare_path = None
         if (
             compare_enabled
             and "compare" in compare_enabled
-            and compare_match_status == "Histogram found."
+            and compare_match_status == COMPARE_HISTOGRAMS_FOUND_MESSAGE
             and compare_file_path
             and compare_dataset_name == compare_file_list_dataset
         ):
             compare_path = compare_file_path
 
         try:
-            image_src = render_histogram_image(
-                file_path,
-                hist_name,
-                compare_path,
-                primary_label=file_label(file_path),
-                compare_label=file_label(compare_path) if compare_path else None,
-                normalize_compare=bool(
-                    compare_path
-                    and normalize_enabled
-                    and "normalize" in normalize_enabled
-                ),
-                ignore_zero_bin=bool(
-                    ignore_zero_enabled
-                    and "ignore_zero" in ignore_zero_enabled
-                ),
-                ks_test=bool(
-                    compare_path
-                    and ks_test_enabled
-                    and "ks" in ks_test_enabled
-                ),
-                frac_diff=bool(
-                    compare_path
-                    and frac_diff_enabled
-                    and "frac_diff" in frac_diff_enabled
-                ),
-            )
+            image_children = []
+            for hist_name in display_hist_names:
+                image_src = render_histogram_image(
+                    file_path,
+                    hist_name,
+                    compare_path,
+                    primary_label=file_label(file_path),
+                    compare_label=file_label(compare_path) if compare_path else None,
+                    normalize_compare=bool(
+                        compare_path
+                        and normalize_enabled
+                        and "normalize" in normalize_enabled
+                    ),
+                    ignore_zero_bin=bool(
+                        ignore_zero_enabled
+                        and "ignore_zero" in ignore_zero_enabled
+                    ),
+                    ks_test=bool(
+                        compare_path
+                        and ks_test_enabled
+                        and "ks" in ks_test_enabled
+                    ),
+                    frac_diff=bool(
+                        compare_path
+                        and frac_diff_enabled
+                        and "frac_diff" in frac_diff_enabled
+                    ),
+                )
+                image_children.append(
+                    html.Img(
+                        src=image_src,
+                        alt=hist_name,
+                        style={
+                            "width": "100%",
+                            "maxWidth": "100%",
+                            "border": "1px solid #ccc",
+                            "padding": "0.5rem",
+                            "background": "#fff",
+                            "boxSizing": "border-box",
+                        },
+                    )
+                )
         except Exception as exc:
-            return "", no_update, f"Error rendering histogram: {exc}"
+            return [], grid_style, no_update, f"Error rendering histogram: {exc}"
 
         plot_id = {
             "dataset": dataset_name,
             "file_path": file_path,
             "file_label": file_label(file_path),
-            "hist_name": hist_name,
+            "hist_names": selected_hist_names,
+            "displayed_hist_names": display_hist_names,
+            "grid_geometry": grid_geometry,
         }
         if compare_path:
             plot_id.update(
@@ -836,7 +952,8 @@ def build_app() -> Dash:
             )
 
         return (
-            image_src,
+            image_children,
+            grid_style,
             plot_id,
             "",
         )
