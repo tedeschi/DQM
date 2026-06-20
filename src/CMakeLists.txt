@@ -5,6 +5,7 @@ cet_make_library(
   DqmMetrics_crv.cc
   DqmMetrics_str.cc
   DqmMetrics_trk.cc
+  DqmMetrics_stm.cc
   DqmTool.cc
 
   LIBRARIES PUBLIC
@@ -38,6 +39,14 @@ cet_build_plugin(DqmCal art::module
 
 cet_build_plugin(DqmCrv art::module
     REG_SOURCE DqmCrv_module.cc
+    LIBRARIES REG
+      Offline::DbService
+      art_root_io::TFileService_service
+      ROOT::Postscript
+)
+
+cet_build_plugin(DqmStm art::module
+    REG_SOURCE DqmStm_module.cc
     LIBRARIES REG
       Offline::DbService
       art_root_io::TFileService_service

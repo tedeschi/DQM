@@ -22,6 +22,9 @@ int mu2e::DqmMetrics::process() {
     } else if (sdir.EqualTo("dqmCrv")) {
       _tfile.cd(sdir);
       crv(*gDirectory);
+    } else if (sdir.EqualTo("dqmStm")) {
+      _tfile.cd(sdir);
+      stm(*gDirectory);
     }
   }
 

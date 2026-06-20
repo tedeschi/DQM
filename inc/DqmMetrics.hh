@@ -25,6 +25,7 @@ class DqmMetrics {
   int str(TDirectory& dir);
   int trk(TDirectory& dir, const char* coll);
   int crv(TDirectory& dir);
+  int stm(TDirectory& dir);
   int addMean(TH1D const* hh, const char* group, const char* subgroup,
               const char* name, int minStats = 20, int precision = 2);
   int addRMS(TH1D const* hh, const char* group, const char* subgroup,
